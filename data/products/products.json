@@ -1,0 +1,57 @@
+
+[
+    {
+        "id": 1,
+        "name": "Floating Wooden Shelf",
+        "category": "storage",
+        "styles": ["modern", "minimalist"],
+        "price": 4500,
+        "currency": "PKR",
+        "description": "Wall-mounted shelf that provides vertical storage without using floor space."
+    },
+    {
+        "id": 2,
+        "name": "Warm LED Floor Lamp",
+        "category": "lighting",
+        "styles": ["modern", "minimalist", "scandinavian"],
+        "price": 7000,
+        "currency": "PKR",
+        "description": "Floor lamp providing warm ambient lighting for bedrooms and living spaces."
+    },
+    {
+        "id": 3,
+        "name": "Minimal Area Rug",
+        "category": "rug",
+        "styles": ["modern", "minimalist", "scandinavian"],
+        "price": 10000,
+        "currency": "PKR",
+        "description": "Simple area rug that adds visual warmth and defines a room area."
+    },
+    {
+        "id": 4,
+        "name": "Compact Study Lamp",
+        "category": "lighting",
+        "styles": ["modern", "minimalist"],
+        "price": 3500,
+        "currency": "PKR",
+        "description": "Compact desk lamp providing focused task lighting for studying and working."
+    },
+    {
+        "id": 5,
+        "name": "Wall Mounted Organizer",
+        "category": "storage",
+        "styles": ["modern", "minimalist"],
+        "price": 3000,
+        "currency": "PKR",
+        "description": "Wall-mounted organizer for small items while keeping the floor clear."
+    },
+    {
+        "id": 6,
+        "name": "Compact Side Table",
+        "category": "furniture",
+        "styles": ["modern", "minimalist"],
+        "price": 6500,
+        "currency": "PKR",
+        "description": "Small side table providing a convenient surface beside a bed or chair."
+    }
+]
