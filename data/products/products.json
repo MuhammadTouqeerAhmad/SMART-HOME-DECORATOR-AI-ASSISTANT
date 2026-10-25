@@ -53,5 +53,34 @@
         "price": 6500,
         "currency": "PKR",
         "description": "Small side table providing a convenient surface beside a bed or chair."
-    }
+    },
+    
+{
+    "id": 7,
+    "name": "Under-Bed Fabric Storage Bins",
+    "category": "storage",
+    "styles": ["modern", "minimalist", "scandinavian"],
+    "price": 2000,
+    "currency": "PKR",
+    "description": "Low-profile fabric bins for storing extra clothes and bed linens under a bed."
+},
+{
+    "id": 8,
+    "name": "Decorative Shelf Baskets",
+    "category": "storage",
+    "styles": ["modern", "minimalist", "scandinavian"],
+    "price": 1500,
+    "currency": "PKR",
+    "description": "Compact baskets for organizing everyday items on existing shelves."
+},
+{
+    "id": 9,
+    "name": "Warm LED Desk Bulb",
+    "category": "lighting",
+    "styles": ["modern", "minimalist", "scandinavian"],
+    "price": 1200,
+    "currency": "PKR",
+    "description": "Warm LED bulb for comfortable ambient lighting in a bedroom or study area."
+}
+
 ]

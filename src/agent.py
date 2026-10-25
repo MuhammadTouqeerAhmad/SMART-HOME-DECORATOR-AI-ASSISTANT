@@ -1,429 +1,3 @@
-# from typing import TypedDict
-
-# from langgraph.graph import StateGraph, START, END
-
-# from src.tools import search_products, calculate_budget
-# from google import genai
-
-# from src.config import GEMINI_API_KEY
-# from src.models import DesignStrategy
-# from src.prompts import DESIGN_STRATEGY_PROMPT
-
-
-# client = genai.Client(
-#     api_key=GEMINI_API_KEY
-# )
-
-# # ==========================================
-# # STATE
-# # ==========================================
-
-# class DecoratorState(TypedDict):
-
-#     user_requirements: dict
-#     room_analysis: dict
-#     retrieved_knowledge: list
-#     available_products: list
-#     selected_products: list
-#     budget_result: dict
-#     design_strategy: dict
-#     user_feedback: str
-#     final_plan: dict
-
-
-# # ==========================================
-# # NODES
-# # ==========================================
-
-# def analyze_room_node(state):
-
-#     return {
-#         "room_analysis": state.get(
-#             "room_analysis",
-#             {}
-#         )
-#     }
-
-
-# def retrieve_knowledge_node(state):
-
-#     room_type = (
-#         state["user_requirements"]
-#         ["room_type"]
-#     )
-
-#     style = (
-#         state["user_requirements"]
-#         ["style"]
-#     )
-
-#     knowledge = [
-#         f"Design knowledge for {room_type}",
-#         f"Design knowledge for {style}"
-#     ]
-
-#     return {
-#         "retrieved_knowledge": knowledge
-#     }
-
-
-# def product_search_node(state):
-
-#     requirements = state[
-#         "user_requirements"
-#     ]
-
-#     style = requirements["style"]
-
-#     products = search_products(
-#         style=style
-#     )
-
-#     return {
-#         "available_products": products
-#     }
-
-
-#     # Your Gemini design strategy code goes here
-
-#     # For now, if you already have your
-#     # Gemini implementation, keep that code.
-# def design_strategy_node(state):
-
-#     requirements = state[
-#         "user_requirements"
-#     ]
-
-#     prompt = DESIGN_STRATEGY_PROMPT.format(
-
-#         room_type=requirements["room_type"],
-
-#         dimensions=requirements["dimensions"],
-
-#         budget=requirements["budget"],
-
-#         currency=requirements["currency"],
-
-#         style=requirements["style"],
-
-#         existing_furniture=requirements[
-#             "existing_furniture"
-#         ],
-
-#         requirements=requirements[
-#             "requirements"
-#         ],
-
-#         room_analysis=state[
-#             "room_analysis"
-#         ],
-
-#         knowledge=state[
-#             "retrieved_knowledge"
-#         ],
-
-#         products=state[
-#             "available_products"
-#         ]
-#     )
-
-
-#     interaction = client.interactions.create(
-
-#         model="gemini-3.6-flash",
-
-#         input=prompt,
-
-#         response_format={
-
-#             "type": "text",
-
-#             "mime_type": "application/json",
-
-#             "schema":
-#                 DesignStrategy
-#                 .model_json_schema()
-#         }
-#     )
-
-
-#     strategy = DesignStrategy.model_validate_json(
-#         interaction.output_text
-#     )
-
-
-#     return {
-#         "design_strategy":
-#             strategy.model_dump()
-#     }
-
-
-
-# def budget_node(state):
-
-#     strategy = state[
-#         "design_strategy"
-#     ]
-
-#     selected_products = (
-#         strategy["recommended_products"]
-#     )
-
-#     items = []
-
-#     for product in selected_products:
-
-#         items.append({
-#             "name": product["name"],
-#             "price": product["price"],
-#             "product_id": product["product_id"]
-#         })
-
-#     result = calculate_budget(items)
-
-#     budget = (
-#         state["user_requirements"]
-#         ["budget"]
-#     )
-
-#     if result["total"] <= budget:
-
-#         status = "within_budget"
-
-#     else:
-
-#         status = "over_budget"
-
-#     return {
-#         "selected_products": items,
-
-#         "budget_result": {
-#             "total": result["total"],
-#             "budget": budget,
-#             "status": status
-#         }
-#     }
-
-
-# # ==========================================
-# # CONDITIONAL DECISION
-# # ==========================================
-
-# def budget_decision(state):
-
-#     status = (
-#         state["budget_result"]
-#         ["status"]
-#     )
-
-#     if status == "within_budget":
-
-#         return "finalize"
-
-#     return "reduce_cost"
-
-
-# # ==========================================
-# # OVER-BUDGET NODE
-# # ==========================================
-
-# def reduce_cost_node(state):
-
-#     print(
-#         "Budget exceeded. "
-#         "Looking for cheaper alternatives..."
-#     )
-
-#     return {
-#         "budget_result": {
-#             **state["budget_result"],
-#             "status": "needs_revision"
-#         }
-#     }
-
-
-# # ==========================================
-# # FINAL NODE
-# # ==========================================
-
-# def finalize_node(state):
-
-#     design_strategy = (
-#         state["design_strategy"]
-#     )
-
-#     budget_result = (
-#         state["budget_result"]
-#     )
-
-#     final_plan = {
-
-#         "design_strategy":
-#             design_strategy,
-
-#         "selected_products":
-#             state["selected_products"],
-
-#         "budget":
-#             budget_result
-#     }
-
-#     return {
-#         "final_plan": final_plan
-#     }
-
-
-# # ==========================================
-# # GRAPH
-# # ==========================================
-
-# builder = StateGraph(
-#     DecoratorState
-# )
-
-
-# builder.add_node(
-#     "analyze_room",
-#     analyze_room_node
-# )
-
-# builder.add_node(
-#     "retrieve_knowledge",
-#     retrieve_knowledge_node
-# )
-
-# builder.add_node(
-#     "search_products",
-#     product_search_node
-# )
-
-# builder.add_node(
-#     "create_design_strategy",
-#     design_strategy_node
-# )
-
-# builder.add_node(
-#     "check_budget",
-#     budget_node
-# )
-
-# builder.add_node(
-#     "reduce_cost",
-#     reduce_cost_node
-# )
-
-# builder.add_node(
-#     "finalize",
-#     finalize_node
-# )
-
-
-# # ==========================================
-# # EDGES
-# # ==========================================
-
-# builder.add_edge(
-#     START,
-#     "analyze_room"
-# )
-
-# builder.add_edge(
-#     "analyze_room",
-#     "retrieve_knowledge"
-# )
-
-# builder.add_edge(
-#     "retrieve_knowledge",
-#     "search_products"
-# )
-
-# builder.add_edge(
-#     "search_products",
-#     "create_design_strategy"
-# )
-
-# builder.add_edge(
-#     "create_design_strategy",
-#     "check_budget"
-# )
-
-
-# builder.add_conditional_edges(
-
-#     "check_budget",
-
-#     budget_decision,
-
-#     {
-#         "finalize":
-#             "finalize",
-
-#         "reduce_cost":
-#             "reduce_cost"
-#     }
-# )
-
-
-# builder.add_edge(
-#     "reduce_cost",
-#     "finalize"
-# )
-
-# builder.add_edge(
-#     "finalize",
-#     END
-# )
-
-
-# graph = builder.compile()
-
-# if __name__ == "__main__":
-
-#     result = graph.invoke({
-
-#         "user_requirements": {
-
-#             "room_type": "Bedroom",
-
-#             "dimensions": "10 × 12 ft",
-
-#             "budget": 30000,
-
-#             "currency": "PKR",
-
-#             "style": "Minimalist",
-
-#             "existing_furniture": (
-#                 "Bed, wardrobe, study table and chair"
-#             ),
-
-#             "requirements": (
-#                 "I need more storage and better lighting."
-#             )
-#         },
-
-#         "room_analysis": {},
-
-#         "retrieved_knowledge": [],
-
-#         "available_products": [],
-
-#         "selected_products": [],
-
-#         "budget_result": {},
-
-#         "design_strategy": {},
-
-#         "user_feedback": "",
-
-#         "final_plan": {}
-#     })
-
-
-#     print("\n========== FINAL RESULT ==========\n")
-
-#     print(result)
-
 from typing import TypedDict
 from google import genai
 from langgraph.graph import (
@@ -439,6 +13,7 @@ from src.prompts import DESIGN_STRATEGY_PROMPT
 from src.tools import select_products
 from src.tools import calculate_budget
 from src.tools import find_cheaper_alternative
+from src.vision import analyze_room
 
 
 client = genai.Client(
@@ -450,6 +25,9 @@ MODEL_NAME = "gemini-3.6-flash"
 class DecoratorState(TypedDict):
 
     user_requirements: dict
+
+    image_bytes: bytes
+    mime_type: str
 
     room_analysis: dict
 
@@ -468,19 +46,49 @@ class DecoratorState(TypedDict):
 
     final_plan: dict
 
-
 def analyze_room_node(state):
 
     print("Analyzing room...")
 
-    return state
+    image_bytes = state.get("image_bytes")
+    mime_type = state.get("mime_type")
 
+    # If an image is provided, analyze it using Gemini Vision.
+    if image_bytes is not None:
 
-# def retrieve_knowledge_node(state):
+        if not mime_type:
+            raise ValueError(
+                "mime_type is required when an image is provided."
+            )
 
-#     print("Retrieving design knowledge...")
+        room_analysis = analyze_room(
+            image_bytes=image_bytes,
+            mime_type=mime_type
+        )
 
-#     return state
+        # Convert the Pydantic model into a dictionary
+        # for the existing downstream nodes.
+        room_analysis = room_analysis.model_dump()
+
+        print("\nRoom analysis completed:")
+        print(room_analysis)
+
+        return {
+            **state,
+            "room_analysis": room_analysis
+        }
+
+    # Backward compatibility for tests that supply
+    # a room analysis manually.
+    if state.get("room_analysis"):
+        print("Using the supplied room analysis.")
+
+        return state
+
+    raise ValueError(
+        "Provide image_bytes and mime_type, "
+        "or supply an existing room_analysis."
+    )
 
 def retrieve_knowledge_node(state):
 
@@ -515,13 +123,6 @@ def retrieve_knowledge_node(state):
         **state,
         "retrieved_knowledge": knowledge
     }
-
-
-# def create_design_strategy_node(state):
-
-#     print("Creating design strategy...")
-
-#     return state
 
 def create_design_strategy_node(state):
 
@@ -590,80 +191,6 @@ def create_design_strategy_node(state):
             strategy.model_dump()
     }
 
-# def search_products_node(state):
-
-#     print("Searching products...")
-
-#     return state
-
-# def search_products_node(state):
-
-#     print("Searching products...")
-
-#     strategy = state["design_strategy"]
-
-#     user_requirements = state["user_requirements"]
-
-#     categories = []
-
-#     if strategy["storage_plan"]:
-#         categories.append("storage")
-
-#     if strategy["lighting_plan"]:
-#         categories.append("lighting")
-
-#     if strategy["furniture_changes"]:
-#         categories.append("furniture")
-
-#     categories = list(
-#         dict.fromkeys(categories)
-#     )
-
-#     products = select_products(
-#         categories=categories,
-#         style=user_requirements["style"]
-#     )
-
-#     return {
-#         **state,
-#         "selected_products": products,
-#         "available_products": products
-#     }
-# def search_products_node(state):
-
-#     print("Searching products...")
-
-#     strategy = state["design_strategy"]
-#     user_requirements = state["user_requirements"]
-
-#     categories = []
-
-#     if strategy["storage_plan"]:
-#         categories.append("storage")
-
-#     if strategy["lighting_plan"]:
-#         categories.append("lighting")
-
-#     # Furniture is currently treated as optional.
-#     # We don't want it to automatically consume the budget.
-#     if strategy["furniture_changes"]:
-#         categories.append("furniture")
-
-#     categories = list(
-#         dict.fromkeys(categories)
-#     )
-
-#     products = select_products(
-#         categories=categories,
-#         style=user_requirements["style"]
-#     )
-
-#     return {
-#         **state,
-#         "selected_products": products,
-#         "available_products": products
-#     }
-
 def normalize_product_category(category):
 
     category = category.lower()
@@ -682,6 +209,174 @@ def normalize_product_category(category):
 
     return None
 
+
+def build_product_keywords(strategy):
+    """
+    Extract useful product-matching keywords from the design strategy.
+    """
+    keyword_map = {
+        "storage": [
+            "storage",
+            "organizer",
+            "shelf",
+            "wall-mounted",
+            "under-bed",
+            "basket",
+            "container",
+        ],
+        "lighting": [
+            "lighting",
+            "lamp",
+            "study",
+            "task",
+            "desk",
+            "warm",
+            "led",
+        ],
+        "rug": [
+            "rug",
+            "area rug",
+            "floor",
+        ],
+        "furniture": [
+            "furniture",
+            "table",
+            "chair",
+        ],
+    }
+
+    # Combine the plan's recommendations into searchable text.
+    strategy_text = " ".join(
+        str(value)
+        for key in (
+            "storage_plan",
+            "lighting_plan",
+            "furniture_changes",
+            "color_plan",
+            "design_summary",
+            "explanation",
+        )
+        for value in (
+            strategy.get(key, [])
+            if isinstance(strategy.get(key, []), list)
+            else [strategy.get(key, "")]
+        )
+    ).lower()
+
+    return {
+        category: [
+            keyword
+            for keyword in keywords
+            if keyword in strategy_text
+        ]
+        for category, keywords in keyword_map.items()
+    }
+
+
+# def search_products_node(state):
+
+#     print("\nImprovement priorities:")
+    
+
+#     print("Searching products...")
+
+#     strategy = state["design_strategy"]
+#     user_requirements = state["user_requirements"]
+
+#     priorities = strategy["improvement_priorities"]
+#     keywords_by_category = build_product_keywords(strategy)
+
+#     for improvement in priorities:
+#         print(improvement)
+    
+#     required_categories = []
+#     recommended_categories = []
+#     optional_categories = []
+
+#     for improvement in priorities:
+
+#         category = normalize_product_category(
+#             improvement["category"]
+#         )
+
+#         if category is None:
+#             continue
+
+#         priority = str(improvement["priority"]).lower()
+
+#         if priority == "required":
+
+#             required_categories.append(category)
+
+#         elif priority == "recommended":
+
+#             recommended_categories.append(category)
+
+#         elif priority == "optional":
+
+#             optional_categories.append(category)
+
+#     required_categories = list(
+#         dict.fromkeys(required_categories)
+#     )
+
+#     recommended_categories = list(
+#         dict.fromkeys(recommended_categories)
+#     )
+
+#     optional_categories = list(
+#         dict.fromkeys(optional_categories)
+#     )
+
+#     required_products = select_products(
+#         categories=required_categories,
+#         style=user_requirements["style"],
+#         keywords_by_category=keywords_by_category
+#     )
+
+#     for product in required_products:
+#         product["priority"] = "required"
+
+#     recommended_products = select_products(
+#         categories=recommended_categories,
+#         style=user_requirements["style"],
+#         keywords_by_category=keywords_by_category
+#     )
+
+#     for product in recommended_products:
+#         product["priority"] = "recommended"
+
+#     optional_products = select_products(
+#         categories=optional_categories,
+#         style=user_requirements["style"],
+#         keywords_by_category=keywords_by_category
+#     )
+
+#     for product in optional_products:
+#         product["priority"] = "optional"
+
+#     products = (
+#         required_products
+#         + recommended_products
+#         + optional_products
+#     )
+
+#     print("\nSelected products:")
+
+#     for product in products:
+
+#         print(
+#             f"- {product['name']} "
+#             f"({product['price']} PKR) "
+#             f"[{product['priority']}]"
+#         )
+
+#     return {
+#         **state,
+#         "selected_products": products,
+#         "available_products": products
+#     }
+
 def search_products_node(state):
 
     print("\nImprovement priorities:")
@@ -693,6 +388,7 @@ def search_products_node(state):
     user_requirements = state["user_requirements"]
 
     priorities = strategy["improvement_priorities"]
+    keywords_by_category = build_product_keywords(strategy)
 
     for improvement in priorities:
         print(improvement)
@@ -738,7 +434,8 @@ def search_products_node(state):
 
     required_products = select_products(
         categories=required_categories,
-        style=user_requirements["style"]
+        style=user_requirements["style"],
+        keywords_by_category=keywords_by_category
     )
 
     for product in required_products:
@@ -746,7 +443,8 @@ def search_products_node(state):
 
     recommended_products = select_products(
         categories=recommended_categories,
-        style=user_requirements["style"]
+        style=user_requirements["style"],
+        keywords_by_category=keywords_by_category
     )
 
     for product in recommended_products:
@@ -754,7 +452,8 @@ def search_products_node(state):
 
     optional_products = select_products(
         categories=optional_categories,
-        style=user_requirements["style"]
+        style=user_requirements["style"],
+        keywords_by_category=keywords_by_category
     )
 
     for product in optional_products:
@@ -782,118 +481,6 @@ def search_products_node(state):
         "available_products": products
     }
 
-# def search_products_node(state):
-
-#     print("Searching products...")
-
-#     strategy = state["design_strategy"]
-#     user_requirements = state["user_requirements"]
-
-#     priorities = strategy["improvement_priorities"]
-
-#     # Required categories
-#     required_categories = []
-
-#     # Recommended categories
-#     recommended_categories = []
-
-#     # Optional categories
-#     optional_categories = []
-
-#     for improvement in priorities:
-
-#         category = improvement["category"].lower()
-#         priority = improvement["priority"].lower()
-
-#         # Map LLM categories to our product categories
-#         if "storage" in category:
-#             category = "storage"
-
-#         elif "lighting" in category:
-#             category = "lighting"
-
-#         elif "furniture" in category:
-#             category = "furniture"
-
-#         elif "rug" in category:
-#             category = "rug"
-
-#         else:
-#             continue
-
-#         if priority == "required":
-
-#             required_categories.append(category)
-
-#         elif priority == "recommended":
-
-#             recommended_categories.append(category)
-
-#         elif priority == "optional":
-
-#             optional_categories.append(category)
-
-#     # Remove duplicate categories while preserving order
-#     required_categories = list(
-#         dict.fromkeys(required_categories)
-#     )
-
-#     recommended_categories = list(
-#         dict.fromkeys(recommended_categories)
-#     )
-
-#     optional_categories = list(
-#         dict.fromkeys(optional_categories)
-#     )
-
-#     # -------------------------------------------------
-#     # Select products according to priority
-#     # -------------------------------------------------
-
-#     required_products = select_products(
-#         categories=required_categories,
-#         style=user_requirements["style"]
-#     )
-
-#     recommended_products = select_products(
-#         categories=recommended_categories,
-#         style=user_requirements["style"]
-#     )
-
-#     optional_products = select_products(
-#         categories=optional_categories,
-#         style=user_requirements["style"]
-#     )
-
-#     # -------------------------------------------------
-#     # Keep priority information with each product
-#     # -------------------------------------------------
-
-#     for product in required_products:
-#         product["priority"] = "required"
-
-#     for product in recommended_products:
-#         product["priority"] = "recommended"
-
-#     for product in optional_products:
-#         product["priority"] = "optional"
-
-#     products = (
-#         required_products
-#         + recommended_products
-#         + optional_products
-#     )
-
-#     return {
-#         **state,
-#         "selected_products": products,
-#         "available_products": products
-#     }
-# def check_budget_node(state):
-
-#     print("Checking budget...")
-
-#     return state
 def check_budget_node(state):
 
     print("Checking budget...")
@@ -914,536 +501,211 @@ def check_budget_node(state):
         "budget_result": budget_result
     }
 
-# def budget_decision(state):
+MAX_BUDGET_ADJUSTMENT_ATTEMPTS = 3
 
-#     budget_result = state["budget_result"]
-
-#     if budget_result["within_budget"]:
-#         return "within_budget"
-
-#     return "over_budget"
 
 def budget_decision(state):
+    budget = float(state["user_requirements"]["budget"])
 
-    budget_result = state["budget_result"]
+    total = sum(
+        float(product["price"])
+        for product in state.get("selected_products", [])
+    )
 
-    attempts = state["budget_adjustment_attempts"]
-
-    # Product selection is within the budget
-    if budget_result["within_budget"]:
+    if total <= budget:
         return "within_budget"
 
-    # Prevent infinite adjustment loops
-    if attempts >= 3:
+    attempts = state.get("budget_adjustment_attempts", 0)
+
+    if attempts >= MAX_BUDGET_ADJUSTMENT_ATTEMPTS:
         return "budget_limit_reached"
 
     return "over_budget"
 
-# def handle_over_budget_node(state):
-
-#     print("Budget exceeded. Adjusting product selection...")
-
-#     return state
-
-
-# def handle_over_budget_node(state):
-
-#     print(
-#         "Budget exceeded. Looking for cheaper alternatives..."
-#     )
-
-#     attempts = state["budget_adjustment_attempts"]
-
-#     if attempts >= 3:
-
-#         print(
-#         "Maximum budget adjustment attempts reached."
-#         )
-
-#         return {
-#         **state,
-#         "budget_adjustment_attempts": attempts + 1
-#         }
-    
-#     products = state["selected_products"]
-
-#     user_requirements = state["user_requirements"]
-
-#     budget = user_requirements["budget"]
-
-#     style = user_requirements["style"]
-
-#     adjusted_products = list(products)
-
-#     # Process the most expensive products first
-#     products_by_price = sorted(
-#         products,
-#         key=lambda item: item["price"],
-#         reverse=True
-#     )
-
-#     for product in products_by_price:
-
-#         current_total = sum(
-#             item["price"]
-#             for item in adjusted_products
-#         )
-
-#         if current_total <= budget:
-#             break
-
-#         remaining_budget = (
-#             budget - (
-#                 current_total - product["price"]
-#             )
-#         )
-
-#         alternative = find_cheaper_alternative(
-#             product=product,
-#             style=style,
-#             max_price=remaining_budget
-#         )
-
-#         if alternative:
-
-#             adjusted_products = [
-#                 (
-#                     alternative
-#                     if item["id"] == product["id"]
-#                     else item
-#                 )
-#                 for item in adjusted_products
-#             ]
-
-#     return {
-#         **state,
-#         "selected_products": adjusted_products,
-#         "budget_adjustment_attempts": attempts + 1
-#     }
-
-# def handle_over_budget_node(state):
-
-#     print(
-#         "Budget exceeded. Looking for cheaper alternatives..."
-#     )
-
-#     products = state["selected_products"]
-
-#     user_requirements = state["user_requirements"]
-
-#     budget = user_requirements["budget"]
-
-#     style = user_requirements["style"]
-
-#     current_total = sum(
-#         product["price"]
-#         for product in products
-#     )
-
-#     adjusted_products = list(products)
-#     adjustment_made = False
-#     # Sort expensive products first
-#     products_by_price = sorted(
-#         adjusted_products,
-#         key=lambda item: item["price"],
-#         reverse=True
-#     )
-
-#     for product in products_by_price:
-
-#         current_total = sum(
-#             item["price"]
-#             for item in adjusted_products
-#         )
-
-#         if current_total <= budget:
-#             break
-
-#         # How much money can we spend on this product
-#         # while keeping the complete selection within budget?
-#         other_products_total = (
-#             current_total - product["price"]
-#         )
-
-#         maximum_allowed_price = (
-#             budget - other_products_total
-#         )
-
-#         alternative = find_cheaper_alternative(
-#             product=product,
-#             style=style,
-#             max_price=maximum_allowed_price
-#         )
-
-#         if alternative:
-
-#             print(
-#                 f"Replacing {product['name']} "
-#                 f"with {alternative['name']}"
-#             )
-
-#             adjusted_products = [
-#                 (
-#                     alternative
-#                     if item["id"] == product["id"]
-#                     else item
-#                 )
-#                 for item in adjusted_products
-#             ]
-#             adjustment_made = True
-#             # Recalculate immediately
-#             current_total = sum(
-#                 item["price"]
-#                 for item in adjusted_products
-#             )
-
-#             if current_total <= budget:
-#                 break
-
-#     return {
-#         **state,
-#         "selected_products": adjusted_products,
-#         "budget_adjustment_attempts":
-#             state["budget_adjustment_attempts"] + 1,
-#         "budget_adjustment_made": adjustment_made
-#     }
-
-# def handle_over_budget_node(state):
-
-#     print(
-#         "Budget exceeded. Optimizing product selection..."
-#     )
-
-#     products = list(
-#         state["selected_products"]
-#     )
-
-#     user_requirements = state["user_requirements"]
-
-#     budget = user_requirements["budget"]
-
-#     style = user_requirements["style"]
-
-#     adjustment_made = False
-
-#     # -------------------------------------------------
-#     # STEP 1: Try cheaper alternatives
-#     # -------------------------------------------------
-
-#     products_by_price = sorted(
-#         products,
-#         key=lambda item: item["price"],
-#         reverse=True
-#     )
-
-#     for product in products_by_price:
-
-#         current_total = sum(
-#             item["price"]
-#             for item in products
-#         )
-
-#         if current_total <= budget:
-#             break
-
-#         other_products_total = (
-#             current_total - product["price"]
-#         )
-
-#         maximum_allowed_price = (
-#             budget - other_products_total
-#         )
-
-#         if maximum_allowed_price <= 0:
-#             continue
-
-#         alternative = find_cheaper_alternative(
-#             product=product,
-#             style=style,
-#             max_price=maximum_allowed_price
-#         )
-
-#         if alternative:
-
-#             print(
-#                 f"Replacing "
-#                 f"{product['name']} "
-#                 f"with "
-#                 f"{alternative['name']}"
-#             )
-
-#             products = [
-#                 (
-#                     alternative
-#                     if item["id"] == product["id"]
-#                     else item
-#                 )
-#                 for item in products
-#             ]
-
-#             adjustment_made = True
-
-#     # -------------------------------------------------
-#     # STEP 2: Remove products if still over budget
-#     # -------------------------------------------------
-
-#     current_total = sum(
-#         item["price"]
-#         for item in products
-#     )
-
-#     if current_total > budget:
-
-#         print(
-#             "Still over budget. "
-#             "Removing lower-priority products..."
-#         )
-
-#         # Remove the most expensive products first.
-#         # This guarantees the total moves toward
-#         # the user's budget.
-#         products = sorted(
-#             products,
-#             key=lambda item: item["price"],
-#             reverse=True
-#         )
-
-#         while products:
-
-#             current_total = sum(
-#                 item["price"]
-#                 for item in products
-#             )
-
-#             if current_total <= budget:
-#                 break
-
-#             removed = products.pop(0)
-
-#             print(
-#                 f"Removing {removed['name']} "
-#                 f"({removed['price']} PKR)"
-#             )
-
-#             adjustment_made = True
-
-#     return {
-#         **state,
-
-#         "selected_products": products,
-
-#         "budget_adjustment_attempts":
-#             state["budget_adjustment_attempts"] + 1,
-
-#         "budget_adjustment_made":
-#             adjustment_made
-#     }
-
 def handle_over_budget_node(state):
+    """
+    Try cheaper alternatives first. If the total is
+    still too high, remove optional products first,
+    followed by recommended products.
 
-    print(
-        "Budget exceeded. Optimizing product selection..."
+    Required products are preserved whenever possible.
+    """
+
+    print("Optimizing product selection...")
+
+    products = [
+        dict(product)
+        for product in state.get("selected_products", [])
+    ]
+
+    requirements = state["user_requirements"]
+    budget = float(requirements["budget"])
+    style = requirements.get("style")
+
+    current_total = sum(
+        float(product["price"])
+        for product in products
     )
-
-    products = list(
-        state["selected_products"]
-    )
-
-    user_requirements = state["user_requirements"]
-
-    budget = user_requirements["budget"]
-
-    style = user_requirements["style"]
 
     adjustment_made = False
 
-    # -------------------------------------------------
-    # STEP 1
-    # Replace expensive products with cheaper
-    # alternatives wherever possible.
-    # -------------------------------------------------
+    # Stop immediately if already within budget.
+    if current_total <= budget:
+        return {
+            **state,
+            "selected_products": products,
+            "budget_adjustment_attempts": (
+                state.get("budget_adjustment_attempts", 0) + 1
+            ),
+            "budget_adjustment_made": False,
+        }
 
-    products_by_price = sorted(
-        products,
-        key=lambda item: item["price"],
-        reverse=True
-    )
+    # STEP 1: Try cheaper alternatives.
+    # Process expensive items first.
+    for index in sorted(
+        range(len(products)),
+        key=lambda i: float(products[i]["price"]),
+        reverse=True,
+    ):
+        product = products[index]
 
-    for product in products_by_price:
+        # alternative = find_cheaper_alternative(
+        #     product=product,
+        #     style=style,
+        # )
+
+        # Exclude IDs of all other currently selected products.
+        already_selected_ids = {
+            item["id"]
+            for other_index, item in enumerate(products)
+            if other_index != index
+        }
 
         alternative = find_cheaper_alternative(
             product=product,
-            style=style
+            style=style,
+            exclude_ids=already_selected_ids,
         )
 
         if alternative:
+            alternative = dict(alternative)
 
-            print(
-                f"Replacing "
-                f"{product['name']} "
-                f"with "
-                f"{alternative['name']}"
+            # Preserve the original priority.
+            alternative["priority"] = product.get(
+                "priority", "recommended"
             )
 
-            products = [
-                (
-                    alternative
-                    if item["id"] == product["id"]
-                    else item
+            if float(alternative["price"]) < float(
+                product["price"]
+            ):
+                print(
+                    f"Replacing {product['name']} with "
+                    f"{alternative['name']}"
                 )
-                for item in products
-            ]
 
-            adjustment_made = True
-
-    # -------------------------------------------------
-    # STEP 2
-    # Check the new total after cheaper alternatives.
-    # -------------------------------------------------
+                products[index] = alternative
+                adjustment_made = True
 
     current_total = sum(
-        item["price"]
-        for item in products
+        float(product["price"])
+        for product in products
     )
 
-    print(
-        f"Total after cheaper alternatives: "
-        f"{current_total} PKR"
-    )
+    print(f"Total after alternatives: {current_total:.2f}")
 
-    # -------------------------------------------------
-    # STEP 3
-    # If still over budget, remove products.
-    # -------------------------------------------------
+    # STEP 2: Remove lower-priority items if necessary.
+    priority_order = {
+        "optional": 0,
+        "recommended": 1,
+        "required": 2,
+    }
+
     if current_total > budget:
-
-        print(
-        "Still over budget. "
-        "Removing lowest-priority products..."
-        )
-
-        priority_order = {
-            "optional": 0,
-            "recommended": 1,
-            "required": 2
-        }
-
-        products = sorted(
-            products,
-            key=lambda item: (
+        products.sort(
+            key=lambda product: (
                 priority_order.get(
-                    item.get("priority", "recommended"),
-                    1
+                    str(product.get("priority", "recommended")).lower(),
+                    1,
                 ),
-                -item["price"]
+                -float(product["price"]),
             )
         )
 
         while products:
-
             current_total = sum(
-                item["price"]
-                for item in products
+                float(product["price"])
+                for product in products
             )
 
             if current_total <= budget:
                 break
 
+            # Remove optional/recommended products first.
+            # Required products are removed only if needed
+            # to get under budget.
             removed = products.pop(0)
 
             print(
-                f"Removing "
-                f"{removed['name']} "
-                f"({removed['price']} PKR) "
-                f"[{removed.get('priority', 'unknown')}]"
+                f"Removed {removed['name']} "
+                f"({removed['price']} PKR)"
             )
 
             adjustment_made = True
-    # if current_total > budget:
 
-    #     print(
-    #         "Still over budget. "
-    #         "Removing products..."
-    #     )
-
-    #     products = sorted(
-    #         products,
-    #         key=lambda item: item["price"],
-    #         reverse=True
-    #     )
-
-    #     while products:
-
-    #         current_total = sum(
-    #             item["price"]
-    #             for item in products
-    #         )
-
-    #         if current_total <= budget:
-    #             break
-
-    #         removed = products.pop(0)
-
-    #         print(
-    #             f"Removing "
-    #             f"{removed['name']} "
-    #             f"({removed['price']} PKR)"
-    #         )
-
-    #         adjustment_made = True
+    attempts = state.get("budget_adjustment_attempts", 0) + 1
 
     return {
         **state,
-
         "selected_products": products,
-
-        "budget_adjustment_attempts":
-            state["budget_adjustment_attempts"] + 1,
-
-        "budget_adjustment_made":
-            adjustment_made
+        "budget_adjustment_attempts": attempts,
+        "budget_adjustment_made": adjustment_made,
     }
-# def finalize_node(state):
-
-#     print("Finalizing plan...")
-
-#     return state
 
 def finalize_node(state):
-
     print("Finalizing plan...")
 
-    budget_result = state["budget_result"]
+    requirements = state["user_requirements"]
+    budget = float(requirements["budget"])
+    products = state.get("selected_products", [])
 
-    if budget_result["within_budget"]:
+    # Always recalculate from the final product list.
+    total = sum(
+        float(product["price"])
+        for product in products
+    )
 
+    remaining = budget - total
+    within_budget = total <= budget
+
+    budget_result = {
+        "items": products,
+        "total": total,
+        "budget": budget,
+        "remaining": remaining,
+        "within_budget": within_budget,
+    }
+
+    if within_budget:
         budget_status = "Within budget"
-
     else:
-
         budget_status = (
-            "Could not meet the requested budget "
-            "with the available products."
+            "Over budget: suitable products could not "
+            "be selected within the available catalog."
         )
 
     final_plan = {
-        "design_strategy":
-            state["design_strategy"],
-
-        "selected_products":
-            state["selected_products"],
-
-        "budget_result":
-            budget_result,
-
-        "budget_status":
-            budget_status
+        "design_strategy": state.get("design_strategy", {}),
+        "selected_products": products,
+        "budget_result": budget_result,
+        "budget_status": budget_status,
     }
 
     return {
         **state,
-        "final_plan": final_plan
+        "budget_result": budget_result,
+        "final_plan": final_plan,
     }
+
 builder = StateGraph(
     DecoratorState
 )
@@ -1510,17 +772,6 @@ builder.add_edge(
     "search_products",
     "check_budget"
 )
-# builder.add_conditional_edges(
-
-#     "check_budget",
-
-#     budget_decision,
-
-#     {
-#         "within_budget": "finalize",
-#         "over_budget": "handle_over_budget"
-#     }
-# )
 
 builder.add_conditional_edges(
 
@@ -1542,15 +793,6 @@ builder.add_edge(
     "handle_over_budget",
     "check_budget"
 )
-# builder.add_edge(
-#     "handle_over_budget",
-#     "finalize"
-# )
-
-# builder.add_edge(
-#     "check_budget",
-#     "finalize"
-# )
 
 builder.add_edge(
     "finalize",
