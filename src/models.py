@@ -48,41 +48,6 @@ class RoomAnalysis(BaseModel):
 
     opportunities: list[str]
 
-
-# class RecommendedProduct(BaseModel):
-
-#     product_id: int
-
-#     name: str
-
-#     reason: str
-
-#     price: float
-#     priority: str
-
-
-# class DesignStrategy(BaseModel):
-
-#     design_summary: str
-
-#     furniture_changes: list[str]
-
-#     lighting_plan: list[str]
-
-#     storage_plan: list[str]
-
-#     color_plan: list[str]
-
-#     recommended_products: list[
-#         RecommendedProduct
-#     ]
-
-#     estimated_total: float
-
-#     budget_status: str
-
-#     explanation: str
-
 class ImprovementPriority(BaseModel):
     category: str
     priority: str

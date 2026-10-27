@@ -1,5 +1,6 @@
 from typing import TypedDict
 from google import genai
+from groq import Groq
 from langgraph.graph import (
     StateGraph,
     START,
@@ -15,12 +16,19 @@ from src.tools import calculate_budget
 from src.tools import find_cheaper_alternative
 from src.vision import analyze_room
 
+from src.config import GROQ_API_KEY, GROQ_MODEL
 
-client = genai.Client(
-    api_key=GEMINI_API_KEY
+# client = genai.Client(
+#     api_key=GEMINI_API_KEY
+# )
+
+# MODEL_NAME = "gemini-3.6-flash"
+
+groq_client = (
+    Groq(api_key=GROQ_API_KEY)
+    if GROQ_API_KEY
+    else None
 )
-
-MODEL_NAME = "gemini-3.6-flash"
 
 class DecoratorState(TypedDict):
 
@@ -124,72 +132,137 @@ def retrieve_knowledge_node(state):
         "retrieved_knowledge": knowledge
     }
 
-def create_design_strategy_node(state):
 
-    print("Creating design strategy...")
+
+def create_design_strategy_node(state):
+    print("Creating design strategy with Groq...")
+
+    if groq_client is None:
+        raise ValueError(
+            "GROQ_API_KEY is missing. "
+            "Please add it to your .env file."
+        )
 
     user_requirements = state["user_requirements"]
-
     room_analysis = state["room_analysis"]
-
     knowledge = state["retrieved_knowledge"]
 
     knowledge_text = "\n\n".join(
         [
-            (
-                f"Source: {item['source']}\n"
-                f"{item['content']}"
-            )
+            f"Source: {item['source']}\n{item['content']}"
             for item in knowledge
         ]
     )
 
     prompt = DESIGN_STRATEGY_PROMPT.format(
-
         room_type=user_requirements["room_type"],
-
         dimensions=user_requirements["dimensions"],
-
         budget=user_requirements["budget"],
-
         currency=user_requirements["currency"],
-
         style=user_requirements["style"],
-
-        existing_furniture=
-            user_requirements["existing_furniture"],
-
-        requirements=
-            user_requirements["requirements"],
-
+        existing_furniture=user_requirements["existing_furniture"],
+        requirements=user_requirements["requirements"],
         room_analysis=room_analysis,
-
-        knowledge=knowledge_text
+        knowledge=knowledge_text,
     )
 
-    interaction = client.interactions.create(
+    schema = DesignStrategy.model_json_schema()
 
-        model=MODEL_NAME,
+    system_message = """
+        You are an expert interior design assistant.
 
-        input=prompt,
+        Return ONLY a valid JSON object. Do not use Markdown or code fences.
 
-        response_format={
-            "type": "text",
-            "mime_type": "application/json",
-            "schema":
-                DesignStrategy.model_json_schema()
-        }
+        The user's specified room type is authoritative.
+        Design only that type of room.
+
+        Ground every recommendation in the provided room analysis,
+        existing furniture, user requirements, and retrieved knowledge.
+
+        Do not invent furniture or room features.
+        Do not recommend replacing existing furniture unless requested.
+        Prefer practical improvements that preserve usable walking space.
+
+        For a bedroom, focus on the bed, bedside furniture, bedroom
+        lighting, storage, colors, and bedroom layout. Do not recommend
+        a sofa, media wall, TV stand, or coffee table unless explicitly
+        requested by the user.
+
+        Product selection is handled by a separate workflow node.
+        Do not invent product names or prices.
+
+        For improvement_priorities, use categories that can be mapped
+        to actual product catalog categories where products are needed.
+        For example, use "lighting" or "storage" rather than vague
+        categories such as "space utilization" when recommending products.
+        Furniture rearrangement can be recommended without requiring
+        a product purchase.
+
+        Return all seven required fields:
+        design_summary, furniture_changes, lighting_plan, storage_plan,
+        color_plan, improvement_priorities, explanation.
+
+        Each improvement priority must contain category, priority,
+        and reason. Priority must be required, recommended, or optional.
+        Use arrays for list fields and follow the supplied JSON schema.
+        """
+
+    response = groq_client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": system_message,
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Create a design strategy using the following "
+                    "actual user and room information.\n\n"
+                    f"{prompt}\n\n"
+                    "Required JSON schema:\n"
+                    f"{schema}\n\n"
+                    "Before responding, verify that the design matches "
+                    f"this room type: {user_requirements['room_type']}. "
+                    "Do not describe a different room."
+                ),
+            },
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.2,
+        max_completion_tokens=3000,
     )
 
-    strategy = DesignStrategy.model_validate_json(
-        interaction.output_text
-    )
+    content = response.choices[0].message.content
+
+    if not content:
+        raise ValueError(
+            "Groq returned an empty design strategy."
+        )
+
+    strategy = DesignStrategy.model_validate_json(content)
+
+    # Additional safeguard: reject a strategy that clearly describes
+    # a different room instead of silently passing it downstream.
+    summary = strategy.design_summary.lower()
+
+    if (
+        user_requirements["room_type"].lower() == "bedroom"
+        and "living room" in summary
+    ):
+        raise ValueError(
+            "Groq generated a living-room strategy for a bedroom. "
+            "Check DESIGN_STRATEGY_PROMPT and the supplied room data."
+        )
+
+    print("Design strategy generated successfully.")
 
     return {
         **state,
-        "design_strategy":
-            strategy.model_dump()
+        "design_strategy": strategy.model_dump(),
     }
+
+
 
 def normalize_product_category(category):
 
@@ -377,11 +450,9 @@ def build_product_keywords(strategy):
 #         "available_products": products
 #     }
 
+
 def search_products_node(state):
-
     print("\nImprovement priorities:")
-    
-
     print("Searching products...")
 
     strategy = state["design_strategy"]
@@ -392,83 +463,97 @@ def search_products_node(state):
 
     for improvement in priorities:
         print(improvement)
-    
+
     required_categories = []
     recommended_categories = []
     optional_categories = []
 
     for improvement in priorities:
-
         category = normalize_product_category(
             improvement["category"]
         )
 
+        # Ignore improvements that do not map to a real
+        # product category in the catalog.
         if category is None:
             continue
 
         priority = str(improvement["priority"]).lower()
 
         if priority == "required":
-
             required_categories.append(category)
-
         elif priority == "recommended":
-
             recommended_categories.append(category)
-
         elif priority == "optional":
-
             optional_categories.append(category)
 
-    required_categories = list(
-        dict.fromkeys(required_categories)
-    )
+    required_categories = list(dict.fromkeys(required_categories))
+    recommended_categories = list(dict.fromkeys(recommended_categories))
+    optional_categories = list(dict.fromkeys(optional_categories))
 
-    recommended_categories = list(
-        dict.fromkeys(recommended_categories)
-    )
-
-    optional_categories = list(
-        dict.fromkeys(optional_categories)
-    )
-
+    # Select required products first.
     required_products = select_products(
         categories=required_categories,
         style=user_requirements["style"],
-        keywords_by_category=keywords_by_category
+        keywords_by_category=keywords_by_category,
     )
+
+    selected_ids = {
+        product["id"] for product in required_products
+    }
 
     for product in required_products:
         product["priority"] = "required"
 
+    # Select recommended products, excluding existing selections.
     recommended_products = select_products(
         categories=recommended_categories,
         style=user_requirements["style"],
-        keywords_by_category=keywords_by_category
+        keywords_by_category=keywords_by_category,
+        exclude_ids=selected_ids,
+    )
+
+    selected_ids.update(
+        product["id"] for product in recommended_products
     )
 
     for product in recommended_products:
         product["priority"] = "recommended"
 
+    # Select optional products, excluding higher-priority selections.
     optional_products = select_products(
         categories=optional_categories,
         style=user_requirements["style"],
-        keywords_by_category=keywords_by_category
+        keywords_by_category=keywords_by_category,
+        exclude_ids=selected_ids,
     )
 
     for product in optional_products:
         product["priority"] = "optional"
 
-    products = (
+    # Defensive deduplication: keep the highest-priority occurrence.
+    products = []
+    seen_product_ids = set()
+
+    for product in (
         required_products
         + recommended_products
         + optional_products
-    )
+    ):
+        product_id = product["id"]
+
+        if product_id in seen_product_ids:
+            print(
+                f"Skipping duplicate product: {product['name']}"
+            )
+            continue
+
+        seen_product_ids.add(product_id)
+        products.append(product)
 
     print("\nSelected products:")
 
     for product in products:
-
         print(
             f"- {product['name']} "
             f"({product['price']} PKR) "
@@ -478,8 +563,9 @@ def search_products_node(state):
     return {
         **state,
         "selected_products": products,
-        "available_products": products
+        "available_products": products,
     }
+
 
 def check_budget_node(state):
 

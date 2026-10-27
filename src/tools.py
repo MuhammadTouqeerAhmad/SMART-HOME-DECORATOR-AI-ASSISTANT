@@ -1,150 +1,3 @@
-# import json
-
-
-# PRODUCT_FILE = (
-#     "data/products/products.json"
-# )
-
-
-# def load_products():
-
-#     with open(
-#         PRODUCT_FILE,
-#         "r",
-#         encoding="utf-8"
-#     ) as file:
-
-#         return json.load(file)
-
-# def search_products(
-#     category=None,
-#     style=None
-# ):
-#     products = load_products()
-
-#     results = []
-
-#     for product in products:
-
-#         if category:
-
-#             if product["category"].lower() != category.lower():
-#                 continue
-
-#         if style:
-
-#             product_styles = [
-#                 item.lower()
-#                 for item in product["styles"]
-#             ]
-
-#             if style.lower() not in product_styles:
-#                 continue
-
-#         results.append(product)
-
-#     return results
-
-# def select_products(
-#     categories,
-#     style
-# ):
-#     products = load_products()
-
-#     selected = []
-
-#     for category in categories:
-
-#         matches = search_products(
-#             category=category,
-#             style=style
-#         )
-
-#         if not matches:
-#             continue
-
-#         # Choose the cheapest suitable product
-#         best_product = min(
-#             matches,
-#             key=lambda item: item["price"]
-#         )
-
-#         selected.append(
-#             best_product
-#         )
-
-#     return selected
-
-# def find_cheaper_alternative(
-#     product,
-#     style=None,
-#     max_price=None
-# ):
-#     products = load_products()
-
-#     alternatives = []
-
-#     for candidate in products:
-
-#         # Do not select the same product
-#         if candidate["id"] == product["id"]:
-#             continue
-
-#         # Prefer the same category
-#         if candidate["category"] != product["category"]:
-#             continue
-
-#         # Respect the preferred style
-#         if style:
-#             candidate_styles = [
-#                 item.lower()
-#                 for item in candidate["styles"]
-#             ]
-
-#             if style.lower() not in candidate_styles:
-#                 continue
-
-#         # Candidate must actually be cheaper
-#         if candidate["price"] >= product["price"]:
-#             continue
-
-#         # Optional maximum price
-#         if max_price is not None:
-#             if candidate["price"] > max_price:
-#                 continue
-
-#         alternatives.append(candidate)
-
-#     # Cheapest suitable alternative
-#     alternatives.sort(
-#         key=lambda item: item["price"]
-#     )
-
-#     if alternatives:
-#         return alternatives[0]
-
-#     return None
-
-# def calculate_budget(
-#     items,
-#     budget
-# ):
-#     total = sum(
-#         item["price"]
-#         for item in items
-#     )
-
-#     remaining = budget - total
-
-#     return {
-#         "items": items,
-#         "total": total,
-#         "budget": budget,
-#         "remaining": remaining,
-#         "within_budget": total <= budget
-#     }
-
-
 import json
 from pathlib import Path
 
@@ -207,59 +60,6 @@ def _relevance_score(product, keywords):
     return score
 
 
-# def select_products(
-#     categories,
-#     style,
-#     keywords_by_category=None
-# ):
-#     """
-#     Select one suitable product per category.
-
-#     Products with more relevant keyword matches rank first.
-#     If relevance is tied, the cheaper product ranks first.
-
-#     Existing calls using only categories and style still work.
-#     """
-#     selected = []
-#     selected_ids = set()
-#     keywords_by_category = keywords_by_category or {}
-
-#     for category in categories:
-#         matches = search_products(
-#             category=category,
-#             style=style
-#         )
-
-#         if not matches:
-#             continue
-
-#         keywords = keywords_by_category.get(
-#             category.lower(), []
-#         )
-
-#         # Most relevant first, then cheapest.
-#         matches.sort(
-#             key=lambda product: (
-#                 -_relevance_score(product, keywords),
-#                 product["price"]
-#             )
-#         )
-
-#         best_product = next(
-#             (
-#                 product
-#                 for product in matches
-#                 if product["id"] not in selected_ids
-#             ),
-#             None
-#         )
-
-#         if best_product:
-#             selected.append(best_product)
-#             selected_ids.add(best_product["id"])
-
-#     return selected
-
 
 def select_products(
     categories,
@@ -267,9 +67,10 @@ def select_products(
     keywords_by_category=None,
     max_products_per_category=2,
     max_price=None,
+    exclude_ids=None,
 ):
     """
-    Select multiple relevant products per category.
+    Select relevant products without duplicates.
 
     Products with more keyword matches rank first.
     Cheaper products rank first when relevance is tied.
@@ -279,48 +80,46 @@ def select_products(
         style: Preferred interior design style.
         keywords_by_category: Relevant keywords per category.
         max_products_per_category: Maximum products per category.
-        max_price: Optional maximum price for each selected product.
+        max_price: Optional maximum price per product.
+        exclude_ids: Product IDs already selected elsewhere.
     """
     selected = []
-    selected_ids = set()
+    selected_ids = set(exclude_ids or [])
     keywords_by_category = keywords_by_category or {}
 
     for category in categories:
         matches = search_products(
             category=category,
-            style=style
+            style=style,
         )
-
-        if not matches:
-            continue
 
         keywords = keywords_by_category.get(
             category.lower(), []
         )
 
-        # Keep products within the optional per-product price limit.
         if max_price is not None:
             matches = [
                 product for product in matches
                 if float(product["price"]) <= float(max_price)
             ]
 
-        # Most relevant first, then cheapest.
         matches.sort(
             key=lambda product: (
                 -_relevance_score(product, keywords),
-                float(product["price"])
+                float(product["price"]),
             )
         )
 
         category_count = 0
 
         for product in matches:
-            if product["id"] in selected_ids:
+            product_id = product["id"]
+
+            if product_id in selected_ids:
                 continue
 
             selected.append(product)
-            selected_ids.add(product["id"])
+            selected_ids.add(product_id)
             category_count += 1
 
             if category_count >= max_products_per_category:
@@ -330,75 +129,61 @@ def select_products(
 
 
 
-# def find_cheaper_alternative(
-#     product,
-#     style=None,
-#     max_price=None
-# ):
-#     products = load_products()
-#     alternatives = []
-
-#     for candidate in products:
-#         if candidate["id"] == product["id"]:
-#             continue
-
-#         if candidate["category"].lower() != product["category"].lower():
-#             continue
-
-#         if style:
-#             candidate_styles = [
-#                 item.lower() for item in candidate["styles"]
-#             ]
-
-#             if style.lower() not in candidate_styles:
-#                 continue
-
-#         if candidate["price"] >= product["price"]:
-#             continue
-
-#         if max_price is not None and candidate["price"] > max_price:
-#             continue
-
-#         alternatives.append(candidate)
-
-#     alternatives.sort(key=lambda item: item["price"])
-
-#     return alternatives[0] if alternatives else None
-
 def find_cheaper_alternative(
     product,
     style=None,
-    max_price=None
+    exclude_ids=None,
 ):
+    """
+    Find a cheaper product in the same category
+    without selecting a duplicate.
+    """
+    exclude_ids = set(exclude_ids or [])
     products = load_products()
-    alternatives = []
+
+    current_price = float(product["price"])
+    current_category = str(
+        product.get("category", "")
+    ).lower()
+
+    candidates = []
 
     for candidate in products:
-        if candidate["id"] == product["id"]:
+        candidate_id = candidate["id"]
+
+        if candidate_id in exclude_ids:
             continue
 
-        if candidate["category"].lower() != product["category"].lower():
+        if candidate_id == product["id"]:
             continue
 
-        if style:
-            candidate_styles = [
-                item.lower() for item in candidate["styles"]
-            ]
-
-            if style.lower() not in candidate_styles:
-                continue
-
-        if candidate["price"] >= product["price"]:
+        if str(candidate.get("category", "")).lower() != current_category:
             continue
 
-        if max_price is not None and candidate["price"] > max_price:
+        candidate_price = float(candidate["price"])
+
+        if candidate_price >= current_price:
             continue
 
-        alternatives.append(candidate)
+        candidate_styles = [
+            item.lower()
+            for item in candidate.get("styles", [])
+        ]
 
-    alternatives.sort(key=lambda item: item["price"])
+        if style and style.lower() not in candidate_styles:
+            continue
 
-    return alternatives[0] if alternatives else None
+        candidates.append(candidate)
+
+    if not candidates:
+        return None
+
+    return min(
+        candidates,
+        key=lambda item: float(item["price"]),
+    )
+
+
 
 
 def calculate_budget(items, budget):
