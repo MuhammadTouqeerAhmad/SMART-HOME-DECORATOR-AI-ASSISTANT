@@ -9,8 +9,108 @@ import {
   Sparkles,
   Wallet,
   X,
+  CheckCircle2,
+  CircleDollarSign,
+  Lightbulb,
+  Package,
+  Palette,
+  TriangleAlert,
 } from "lucide-react";
 import axios from "axios";
+
+type DataValue = string | number | boolean | null | undefined | DataValue[] | {
+  [key: string]: DataValue;
+};
+
+function formatLabel(value: string) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function ResultValue({ value }: { value: DataValue }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-slate-400">Not provided</span>;
+  }
+
+  if (typeof value === "boolean") {
+    return (
+      <span className={value ? "font-medium text-emerald-700" : "font-medium text-amber-700"}>
+        {value ? "Yes" : "No"}
+      </span>
+    );
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return <span className="break-words">{String(value)}</span>;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="text-slate-400">No items available</span>;
+    }
+
+    return (
+      <ul className="space-y-2">
+        {value.map((item, index) => (
+          <li key={index} className="flex items-start gap-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+            <div className="min-w-0 flex-1">
+              <ResultValue value={item} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(value).map(([key, item]) => (
+        <div
+          key={key}
+          className="grid gap-1 border-b border-stone-100 pb-3 last:border-0 last:pb-0 sm:grid-cols-[180px_minmax(0,1fr)]"
+        >
+          <span className="text-sm font-medium text-slate-500">
+            {formatLabel(key)}
+          </span>
+          <div className="min-w-0 text-sm leading-6 text-slate-800">
+            <ResultValue value={item} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResultSection({
+  title,
+  description,
+  icon,
+  value,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  value: DataValue;
+}) {
+  return (
+    <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-7">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-900">
+          {icon}
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+        </div>
+      </div>
+
+      <ResultValue value={value} />
+    </section>
+  );
+}
 
 export default function Home() {
   const [image, setImage] = useState<File | null>(null);
@@ -387,21 +487,103 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 
           </div>
         </form>
-        {result && (
-          <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8">
-            <h2 className="text-xl font-bold">
-              AI Design Results
-            </h2>
+        
+{result && (
+  <section className="mt-10 space-y-6">
+    <div className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-300 text-slate-900">
+          <Sparkles size={25} />
+        </div>
 
-            <p className="mt-2 text-sm text-slate-600">
-              Your backend returned the following design information.
-            </p>
+        <div>
+          <p className="text-sm text-slate-300">
+            Your personalized design report
+          </p>
+          <h2 className="text-2xl font-bold">
+            Your AI Design Results
+          </h2>
+        </div>
+      </div>
 
-            <pre className="mt-5 max-h-[600px] overflow-auto rounded-xl bg-slate-950 p-4 text-sm leading-6 text-green-300">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          </section>
-        )}
+      <p className="mt-4 max-w-2xl leading-7 text-slate-300">
+        Explore your room analysis, suggested improvements, product
+        selections, and budget assessment below.
+      </p>
+
+      <div className="mt-5 flex flex-wrap gap-2 text-sm">
+        <span className="rounded-full bg-white/10 px-3 py-1.5">
+          {roomType}
+        </span>
+        <span className="rounded-full bg-white/10 px-3 py-1.5">
+          {style}
+        </span>
+        <span className="rounded-full bg-white/10 px-3 py-1.5">
+          {dimensions}
+        </span>
+      </div>
+    </div>
+
+    <div className="grid gap-5 lg:grid-cols-2">
+      {result.room_analysis && (
+        <ResultSection
+          title="Room Analysis"
+          description="What the AI identified in your room."
+          icon={<Palette size={22} />}
+          value={result.room_analysis}
+        />
+      )}
+
+      {result.design_strategy && (
+        <ResultSection
+          title="Design Strategy"
+          description="The improvements recommended for your space."
+          icon={<Lightbulb size={22} />}
+          value={result.design_strategy}
+        />
+      )}
+
+      {result.selected_products && (
+        <ResultSection
+          title="Selected Products"
+          description="Items selected by the AI for your design plan."
+          icon={<Package size={22} />}
+          value={result.selected_products}
+        />
+      )}
+
+      {result.budget_result && (
+        <ResultSection
+          title="Budget Assessment"
+          description="The cost assessment returned by the AI workflow."
+          icon={<CircleDollarSign size={22} />}
+          value={result.budget_result}
+        />
+      )}
+    </div>
+
+    {result.final_plan && (
+      <ResultSection
+        title="Final Design Plan"
+        description="The overall design plan produced by your agent."
+        icon={<CheckCircle2 size={22} />}
+        value={result.final_plan}
+      />
+    )}
+
+    {result.retrieved_knowledge && (
+      <details className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-7">
+        <summary className="cursor-pointer font-semibold text-slate-800">
+          Design knowledge used by the AI
+        </summary>
+        <div className="mt-5">
+          <ResultValue value={result.retrieved_knowledge} />
+        </div>
+      </details>
+    )}
+  </section>
+)}
+
       </section>
     </main>
   );
