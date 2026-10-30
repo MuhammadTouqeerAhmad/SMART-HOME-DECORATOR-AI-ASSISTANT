@@ -9,8 +9,9 @@ from fastapi import (
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.agent import graph
+#from src.agent import graph
 
+from backend.services.design_service import generate_design
 
 app = FastAPI(
     title="AI Home Decorator API",
@@ -104,7 +105,8 @@ def create_design(
 
     try:
         # Run the existing AI workflow.
-        result = graph.invoke(initial_state)
+        #result = graph.invoke(initial_state)
+        result = generate_design(initial_state)
 
     except Exception as exc:
         # Details remain in the backend terminal for debugging.
