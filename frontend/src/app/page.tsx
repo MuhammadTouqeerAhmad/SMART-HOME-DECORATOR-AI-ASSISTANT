@@ -3,6 +3,7 @@
 
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import axios from "axios";
+import api from "@/services/api";
 import {
   Armchair,
   CheckCircle2,
@@ -230,10 +231,7 @@ export default function Home() {
     formData.append("requirements", requirements);
 
     try {
-      const response = await axios.post(
-        `${apiUrl.replace(/\/+$/, "")}/api/design`,
-        formData
-      );
+      const response = await api.post("/api/design", formData);
 
       setResult(response.data);
       setMessage("Your personalized design is ready.");
