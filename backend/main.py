@@ -11,7 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 #from src.agent import graph
 from backend.auth.routes import router as auth_router
+from backend.designs.routes import router as designs_router
+
 from backend.services.design_service import generate_design
+
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from backend.auth.dependencies import get_optional_current_user
+from backend.database.connection import get_db
+from backend.database.models import User
+from backend.designs.service import save_design
 
 app = FastAPI(
     title="AI Home Decorator API",
@@ -20,6 +30,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(designs_router)
 
 # Allow the React development frontend to access the API.
 app.add_middleware(
@@ -60,6 +71,12 @@ def create_design(
     style: str = Form(...),
     existing_furniture: str = Form(...),
     requirements: str = Form(...),
+
+    # Optional authentication:
+    # Guests can generate designs without a token.
+    # Registered users can generate and save designs.
+    current_user: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
 ):
     # Validate the uploaded image.
     mime_type = image.content_type or ""
@@ -78,18 +95,19 @@ def create_design(
             detail="The uploaded image is empty.",
         )
 
-    # Prepare the input in the format expected by
-    # the existing LangGraph agent.
+    # Prepare input for the existing LangGraph agent.
+    design_input = {
+        "room_type": room_type.strip(),
+        "dimensions": dimensions.strip(),
+        "budget": budget,
+        "currency": currency.strip(),
+        "style": style.strip(),
+        "existing_furniture": existing_furniture.strip(),
+        "requirements": requirements.strip(),
+    }
+
     initial_state = {
-        "user_requirements": {
-            "room_type": room_type.strip(),
-            "dimensions": dimensions.strip(),
-            "budget": budget,
-            "currency": currency.strip(),
-            "style": style.strip(),
-            "existing_furniture": existing_furniture.strip(),
-            "requirements": requirements.strip(),
-        },
+        "user_requirements": design_input,
         "image_bytes": image_bytes,
         "mime_type": mime_type,
         "room_analysis": {},
@@ -105,12 +123,10 @@ def create_design(
     }
 
     try:
-        # Run the existing AI workflow.
-        #result = graph.invoke(initial_state)
+        # Generate the design using the existing AI workflow.
         result = generate_design(initial_state)
 
     except Exception as exc:
-        # Details remain in the backend terminal for debugging.
         print(f"AI design workflow failed: {exc}")
 
         raise HTTPException(
@@ -121,8 +137,7 @@ def create_design(
             ),
         ) from exc
 
-    # Do not return image_bytes or the entire internal state.
-    # Return only the information needed by the frontend.
+    # Prepare the response.
     response = {
         "message": "Design generated successfully.",
         "room_analysis": result.get("room_analysis", {}),
@@ -136,5 +151,31 @@ def create_design(
         "budget_result": result.get("budget_result", {}),
         "final_plan": result.get("final_plan", {}),
     }
+
+    # Save the design only when the user is authenticated.
+    if current_user is not None:
+        try:
+            saved_design = save_design(
+                db=db,
+                user_id=current_user.id,
+                room_type=room_type.strip(),
+                design_input=design_input,
+                design_result=response,
+            )
+
+            response["saved"] = True
+            response["design_id"] = str(saved_design.id)
+
+        except Exception as exc:
+            print(f"Design saving failed: {exc}")
+
+            raise HTTPException(
+                status_code=500,
+                detail="Design was generated but could not be saved.",
+            ) from exc
+
+    else:
+        response["saved"] = False
+        response["design_id"] = None
 
     return jsonable_encoder(response)
