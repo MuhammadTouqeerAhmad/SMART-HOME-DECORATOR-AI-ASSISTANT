@@ -8,3 +8,8 @@ fastapi
 uvicorn[standard]
 python-multipart
 groq
+sqlalchemy
+pyodbc
+pwdlib[argon2]
+email-validator
+PyJWT

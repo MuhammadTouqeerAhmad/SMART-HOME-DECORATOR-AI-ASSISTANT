@@ -10,7 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 
 #from src.agent import graph
-
+from backend.auth.routes import router as auth_router
 from backend.services.design_service import generate_design
 
 app = FastAPI(
@@ -19,6 +19,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.include_router(auth_router)
 
 # Allow the React development frontend to access the API.
 app.add_middleware(
