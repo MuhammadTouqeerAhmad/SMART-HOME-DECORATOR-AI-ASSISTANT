@@ -81,3 +81,16 @@ def get_current_user(
         )
 
     return user
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+
+    if credentials is None:
+        return None
+
+    return get_current_user(
+        credentials=credentials,
+        db=db,
+    )

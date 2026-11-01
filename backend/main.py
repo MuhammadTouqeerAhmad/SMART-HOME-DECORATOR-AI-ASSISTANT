@@ -8,6 +8,7 @@ from fastapi import (
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Annotated
 
 #from src.agent import graph
 from backend.auth.routes import router as auth_router
@@ -22,6 +23,14 @@ from backend.auth.dependencies import get_optional_current_user
 from backend.database.connection import get_db
 from backend.database.models import User
 from backend.designs.service import save_design
+
+import logging
+
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+
+logger = logging.getLogger(__name__)
+
 
 app = FastAPI(
     title="AI Home Decorator API",
@@ -44,6 +53,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def validate_text(value: str, field_name: str) -> str:
+    value = value.strip()
+
+    if not value:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} cannot be empty.",
+        )
+
+    return value
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": "JPEG",
+    "image/png": "PNG",
+    "image/webp": "WEBP",
+}
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error_handler(request, exc):
+    logger.error(
+        "Database error: %s",
+        exc,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "A database error occurred. Please try again later."
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_error_handler(request, exc):
+    logger.error(
+        "Unexpected server error: %s",
+        exc,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An unexpected server error occurred. Please try again later."
+        },
+    )
 
 @app.get("/")
 def home():
@@ -60,6 +118,54 @@ def health_check():
         "service": "AI Home Decorator API",
     }
 
+def validate_uploaded_image(image: UploadFile) -> tuple[bytes, str]:
+    # Check the declared MIME type.
+    mime_type = image.content_type or ""
+
+    if mime_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, and WEBP images are supported.",
+        )
+
+    # Read only one byte more than the allowed limit.
+    image_bytes = image.file.read(MAX_IMAGE_SIZE + 1)
+
+    if not image_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded image is empty.",
+        )
+
+    # Check file size.
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="Image size cannot exceed 5 MB.",
+        )
+
+    # Check the actual file signature.
+    is_jpeg = image_bytes.startswith(b"\xff\xd8\xff")
+    is_png = image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = (
+        len(image_bytes) >= 12
+        and image_bytes.startswith(b"RIFF")
+        and image_bytes[8:12] == b"WEBP"
+    )
+
+    valid_signatures = {
+        "image/jpeg": is_jpeg,
+        "image/png": is_png,
+        "image/webp": is_webp,
+    }
+
+    if not valid_signatures[mime_type]:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file does not match its declared image format.",
+        )
+
+    return image_bytes, mime_type
 
 @app.post("/api/design")
 def create_design(
@@ -79,31 +185,18 @@ def create_design(
     db: Session = Depends(get_db),
 ):
     # Validate the uploaded image.
-    mime_type = image.content_type or ""
-
-    if not mime_type.startswith("image/"):
-        raise HTTPException(
-            status_code=400,
-            detail="Please upload a valid image file.",
-        )
-
-    image_bytes = image.file.read()
-
-    if not image_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail="The uploaded image is empty.",
-        )
+    image_bytes, mime_type = validate_uploaded_image(image)
 
     # Prepare input for the existing LangGraph agent.
     design_input = {
-        "room_type": room_type.strip(),
-        "dimensions": dimensions.strip(),
+        "room_type": validate_text(room_type, "Room type"),
+        "dimensions": validate_text(dimensions, "Dimensions"),
         "budget": budget,
-        "currency": currency.strip(),
-        "style": style.strip(),
+        "currency": validate_text(currency, "Currency"),
+        "style": validate_text(style, "Style"),
         "existing_furniture": existing_furniture.strip(),
         "requirements": requirements.strip(),
+        
     }
 
     initial_state = {

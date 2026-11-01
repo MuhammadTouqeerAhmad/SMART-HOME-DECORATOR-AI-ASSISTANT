@@ -13,3 +13,10 @@ class DesignResponse(BaseModel):
     design_input: dict
     design_result: dict
     created_at: datetime
+
+class DesignListResponse(BaseModel):
+    items: list[DesignResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
