@@ -213,7 +213,7 @@ export default function DesignDetailsPage() {
   return (
     <main className="min-h-screen bg-stone-50">
       {/* Header */}
-      <header className="border-b border-stone-200 bg-white">
+      {/* <header className="border-b border-stone-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
@@ -236,7 +236,7 @@ export default function DesignDetailsPage() {
             My Designs
           </Link>
         </div>
-      </header>
+      </header> */}
 
       <div className="mx-auto max-w-5xl px-5 py-10 lg:px-8">
         {/* Heading */}

@@ -332,7 +332,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-stone-100 text-slate-900">
-      <header className="border-b border-stone-200 bg-white">
+      {/* <header className="border-b border-stone-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-5 sm:px-8">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
             <Armchair size={24} />
@@ -346,7 +346,7 @@ export default function Home() {
             </p>
           </div>
         </div>
-      </header>
+      </header> */}
 
       <section className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
         <div className="mb-10 max-w-2xl">
